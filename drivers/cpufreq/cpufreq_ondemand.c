@@ -25,7 +25,9 @@
 #include <linux/input.h>
 #include <linux/workqueue.h>
 #include <linux/slab.h>
+#include <mach/kgsl.h>
 
+static int old_up_threshold;
 /*
                                                                     
                                                    
@@ -149,7 +151,8 @@ static struct dbs_tuners {
 	unsigned int high_grid_load;
 	unsigned int lpm_state;
 	unsigned int optimal_lpm_freq; /*        */
-#endif /*                                  */
+#endif /*                                 */
+	int gboost;
 } dbs_tuners_ins = {
 	.up_threshold_multi_core = DEF_FREQUENCY_UP_THRESHOLD,
 	.up_threshold = DEF_FREQUENCY_UP_THRESHOLD,
@@ -172,6 +175,8 @@ static struct dbs_tuners {
 	.optimal_lpm_freq = DEF_OLPM_FREQ,
 	.lpm_state=0,
 #endif /*                                  */
+	.gboost = 1,
+
 };
 
 static inline u64 get_cpu_idle_time_jiffy(unsigned int cpu, u64 *wall)
@@ -348,6 +353,7 @@ show_one(optimal_max_freq, optimal_max_freq);
 show_one(optimal_lpm_freq, optimal_lpm_freq);
 show_one(lpm_state,lpm_state);
 #endif /*                                 */
+show_one(gboost, gboost);
 
 static ssize_t show_powersave_bias
 (struct kobject *kobj, struct attribute *attr, char *buf)
@@ -783,6 +789,19 @@ skip_this_cpu_bypass:
 	return count;
 }
 
+static ssize_t store_gboost(struct kobject *a, struct attribute *b,
+				const char *buf, size_t count)
+{
+	unsigned int input;
+	int ret;
+
+	ret = sscanf(buf, "%u", &input);
+	if(ret != 1)
+		return -EINVAL;
+	dbs_tuners_ins.gboost = (input > 0 ? input : 0);
+	return count;
+}
+
 define_one_global_rw(sampling_rate);
 define_one_global_rw(io_is_busy);
 define_one_global_rw(up_threshold);
@@ -804,6 +823,7 @@ define_one_global_rw(high_grid_load);
 define_one_global_rw(lpm_state);
 define_one_global_rw(optimal_lpm_freq);
 #endif /*                                  */
+define_one_global_rw(gboost);
 
 static struct attribute *dbs_attributes[] = {
 	&sampling_rate_min.attr,
@@ -827,6 +847,7 @@ static struct attribute *dbs_attributes[] = {
 	&lpm_state.attr,
 	&optimal_lpm_freq.attr,
 #endif /*                                  */
+	&gboost.attr,
 	NULL
 };
 
@@ -1012,6 +1033,16 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 		dbs_freq_increase(policy, policy->max);
 #endif /*                                  */
 		return;
+	}
+
+	//graphics boost
+		if (graphics_boost && dbs_tuners_ins.gboost) {
+			if (dbs_tuners_ins.up_threshold != 49)
+				old_up_threshold = dbs_tuners_ins.up_threshold;
+			dbs_tuners_ins.up_threshold = 49;
+		} else {
+			if (dbs_tuners_ins.up_threshold == 49)
+				dbs_tuners_ins.up_threshold = old_up_threshold;
 	}
 
 	if (num_online_cpus() > 1) {
