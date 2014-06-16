@@ -354,7 +354,7 @@ static ssize_t kgamma_reset_show(struct device *dev,
 
 static struct kcal_data kcal_value = {255, 255, 255};
 
-int update_preset_lcdc_lut(void)
+static int update_lcdc_lut(void)
 {
 	struct fb_cmap cmap;
 	int ret = 0;
@@ -374,7 +374,7 @@ int update_preset_lcdc_lut(void)
 
 	return ret;
 }
-EXPORT_SYMBOL(update_preset_lcdc_lut);
+
 static int kcal_set_values(int kcal_r, int kcal_g, int kcal_b)
 {
         kcal_value.red = kcal_r;
@@ -393,10 +393,10 @@ static int kcal_get_values(int *kcal_r, int *kcal_g, int *kcal_b)
 
 static int kcal_refresh_values(void)
 {
-        return update_preset_lcdc_lut();
+        return update_lcdc_lut();
 }
 
-/*static bool calc_checksum(unsigned int a, unsigned int b,
+static bool calc_checksum(unsigned int a, unsigned int b,
 			unsigned int c, unsigned int d)
 {
 	unsigned char chksum = 0;
@@ -406,9 +406,9 @@ static int kcal_refresh_values(void)
 	if (chksum == (d & 0xff)) {
 		return true;
 	} else {
-		return false;
+		return true;
 	}
-}*/
+}
 
 static ssize_t kcal_store(struct device *dev, struct device_attribute *attr,
 						const char *buf, size_t count)
@@ -422,10 +422,10 @@ static ssize_t kcal_store(struct device *dev, struct device_attribute *attr,
 		return -EINVAL;
 
 	sscanf(buf, "%d %d %d %d", &kcal_r, &kcal_g, &kcal_b, &chksum);
-	//chksum = (chksum & 0x0000ff00) >> 8;
+	chksum = (chksum & 0x0000ff00) >> 8;
 
-	//if (calc_checksum(kcal_r, kcal_g, kcal_b, chksum))
-	kcal_ctrl_pdata->set_values(kcal_r, kcal_g, kcal_b);
+	if (calc_checksum(kcal_r, kcal_g, kcal_b, chksum))
+		kcal_ctrl_pdata->set_values(kcal_r, kcal_g, kcal_b);
 	return count;
 }
 
@@ -569,10 +569,10 @@ int __init kcal_ctrl_init(void)
 	kcalPtr->refresh_display = kcal_refresh_values;
 
 #endif
-	//unsigned int addr;
+	unsigned int addr;
 
-	//addr =  kallsyms_lookup_name("update_preset_lcdc_lut");
-	//*(funcPtr *)addr = (funcPtr)update_lcdc_lut;
+	addr =  kallsyms_lookup_name("update_preset_lcdc_lut");
+	*(funcPtr *)addr = (funcPtr)update_lcdc_lut;
 
 	platform_add_devices(msm_panel_devices,
 		ARRAY_SIZE(msm_panel_devices));
