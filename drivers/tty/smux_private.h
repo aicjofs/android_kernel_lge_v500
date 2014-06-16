@@ -12,6 +12,9 @@
  * GNU General Public License for more details.
  *
  */
+#if defined (CONFIG_SLAB) || defined (CONFIG_SLOB)
+#include <linux/workqueue.h>
+#endif
 #ifndef SMUX_PRIVATE_H
 #define SMUX_PRIVATE_H
 
